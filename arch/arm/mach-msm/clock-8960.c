@@ -3268,7 +3268,8 @@ static struct clk_freq_tbl clk_tbl_gfx2d[] = {
 	F_GFX2D(160000000, pll2, 1,  5),
 	F_GFX2D(177778000, pll2, 2,  9),
 	F_GFX2D(200000000, pll2, 1,  4),
-	F_GFX2D(228571000, pll2, 2,  7),
+	//F_GFX2D(228571000, pll2, 2,  7),
+	F_GFX2D(300000000, pll2, 2,  7),
 	F_END
 };
 
@@ -3310,8 +3311,10 @@ static struct rcg_clk gfx2d0_clk = {
 	.c = {
 		.dbg_name = "gfx2d0_clk",
 		.ops = &clk_ops_rcg_8960,
+		/*VDD_DIG_FMAX_MAP3(LOW,  100000000, NOMINAL, 200000000,
+				  HIGH, 228571000),*/
 		VDD_DIG_FMAX_MAP3(LOW,  100000000, NOMINAL, 200000000,
-				  HIGH, 228571000),
+				  HIGH, 300000000),
 		CLK_INIT(gfx2d0_clk.c),
 	},
 };
@@ -3354,8 +3357,10 @@ static struct rcg_clk gfx2d1_clk = {
 	.c = {
 		.dbg_name = "gfx2d1_clk",
 		.ops = &clk_ops_rcg_8960,
-		VDD_DIG_FMAX_MAP3(LOW,  100000000, NOMINAL, 200000000,
-				  HIGH, 228571000),
+		/*VDD_DIG_FMAX_MAP3(LOW,  100000000, NOMINAL, 200000000,
+				  HIGH, 228571000),*/
+				  VDD_DIG_FMAX_MAP3(LOW,  100000000, NOMINAL, 200000000,
+				  HIGH, 300000000),
 		CLK_INIT(gfx2d1_clk.c),
 	},
 };
@@ -3408,14 +3413,14 @@ static struct clk_freq_tbl clk_tbl_gfx3d_8960_oc[] = {
   F_GFX3D(300000000, pll3, 1,  4),
   F_GFX3D(320000000, pll2, 2,  5),
   F_GFX3D(400000000, pll2, 1,  2),
-  F_GFX3D(480000000, pll3, 2,  5),
+  F_GFX3D(560000000, pll3, 2,  5),
   F_END
 };
 
 static unsigned long fmax_gfx3d_8960_oc[MAX_VDD_LEVELS] __initdata = {
   [VDD_DIG_LOW]     = 128000000,
   [VDD_DIG_NOMINAL] = 320000000,
-  [VDD_DIG_HIGH]    = 480000000
+  [VDD_DIG_HIGH]    = 560000000
 };
 #else
 static struct clk_freq_tbl clk_tbl_gfx3d_8960_v2[] = {
