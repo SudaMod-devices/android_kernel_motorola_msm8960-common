@@ -2698,8 +2698,13 @@ static struct kgsl_device_iommu_data kgsl_2d0_iommu_data[] = {
 static struct kgsl_device_platform_data kgsl_2d0_pdata = {
 	.pwrlevel = {
 		{
+#ifdef CONFIG_GPU_2D_OVERCLOCK		
 			.gpu_freq = 300000000,
+#else
+            .gpu_freq = 200000000,
+#endif
 			.bus_freq = 2,
+			
 		},
 		{
 			.gpu_freq = 96000000,
@@ -2760,11 +2765,14 @@ static struct resource kgsl_2d1_resources[] = {
 		.flags = IORESOURCE_IRQ,
 	},
 };
-
 static struct kgsl_device_platform_data kgsl_2d1_pdata = {
 	.pwrlevel = {
 		{
+#ifdef CONFIG_GPU_2D_OVERCLOCK		
 			.gpu_freq = 300000000,
+#else
+            .gpu_freq = 200000000,
+#endif
 			.bus_freq = 2,
 		},
 		{

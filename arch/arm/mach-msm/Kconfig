@@ -2295,5 +2295,10 @@ config CPU_OVERCLOCK
 	default n
 	help
 		Processor overclocking up to 2 GHz for fast bin or 1.9 GHz for nom
-
+		
+config GPU_2D_OVERCLOCK
+    bool "Enable GFX2D Overclocking option"
+    default n
+    help
+		Adreno2xx GFX2D overclocking up to 300 MHZ
 endif
