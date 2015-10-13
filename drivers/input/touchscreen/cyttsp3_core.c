@@ -37,15 +37,6 @@
 #include <linux/version.h>	/* Required for kernel version checking */
 #include <linux/firmware.h>	/* This enables firmware class loader code */
 
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-#ifdef CONFIG_TOUCHSCREEN_SWEEP2WAKE
-#include <linux/input/sweep2wake.h>
-#endif
-#ifdef CONFIG_TOUCHSCREEN_DOUBLETAP2WAKE
-#include <linux/input/doubletap2wake.h>
-#endif
-#endif
-
 #define CY_USE_HW_RESET
 
 /* Soft reset here is for platforms with no hw reset line */
@@ -2721,7 +2712,6 @@ int cyttsp_resume(void *handle)
 	struct cyttsp *ts = handle;
 	int retval = 0;
 
-
 	cyttsp_dbg(ts, CY_DBG_LVL_3, "%s: Resuming...", __func__);
 
 	mutex_lock(&ts->data_lock);
@@ -2783,15 +2773,7 @@ int cyttsp_suspend(void *handle)
 	int retval = 0;
 	struct cyttsp *ts = handle;
 	uint8_t sleep;
-	
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	if ((s2w_switch > 0) || (dt2w_switch > 0)) {
-		pr_info("suspend avoided!\n");
-		pr_err("%s: Already in %s state\n", __func__,
-				cyttsp_powerstate_string[ts->power_state]);
-		return 0;
-	} else {
-#endif
+
 	cyttsp_dbg(ts, CY_DBG_LVL_3, "%s: Suspending...\n", __func__);
 
 	switch (ts->power_state) {
@@ -2806,8 +2788,6 @@ int cyttsp_suspend(void *handle)
 		if (retval < 0) {
 			pr_err("%s: Failed to write sleep bit\n", __func__);
 		} else {
-			
-			
 			ts->power_state = CY_SLEEP_STATE;
 			cyttsp_pr_state(ts);
 		}
@@ -2836,9 +2816,7 @@ int cyttsp_suspend(void *handle)
 				cyttsp_powerstate_string[ts->power_state]);
 		break;
 	}
-#ifdef CONFIG_TOUCHSCREEN_PREVENT_SLEEP
-	}
-#endif
+
 	return retval;
 }
 EXPORT_SYMBOL_GPL(cyttsp_suspend);
@@ -2868,7 +2846,6 @@ void cyttsp_late_resume(struct early_suspend *h)
 	if (retval < 0) {
 		pr_err("%s: Late resume failed with error code %d\n",
 				__func__, retval);
-
 	}
 }
 #endif
