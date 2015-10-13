@@ -23,6 +23,7 @@
 #include <linux/delay.h>
 #include <linux/io.h>
 #include <linux/percpu.h>
+#include <linux/syscore_ops.h>
 #include <linux/mm.h>
 
 #include <asm/mach/time.h>
@@ -81,6 +82,12 @@ enum {
  */
 static int global_timer_offset;
 static int msm_global_timer;
+
+static struct timespec persistent_ts;
+static u64 persistent_ns;
+static u64 last_persistent_ns;
+static struct timespec suspend_ts;
+static u64 cyc_offset;
 
 #define NR_TIMERS ARRAY_SIZE(msm_clocks)
 
@@ -161,7 +168,6 @@ static struct msm_clock msm_clocks[] = {
 			.rating         = 200,
 			.read           = msm_gpt_read,
 			.mask           = CLOCKSOURCE_MASK(32),
-			.shift          = 17,
 			.flags          = CLOCK_SOURCE_IS_CONTINUOUS,
 		},
 		.irq = INT_GP_TIMER_EXP,
@@ -184,7 +190,6 @@ static struct msm_clock msm_clocks[] = {
 			.rating         = DG_TIMER_RATING,
 			.read           = msm_dgt_read,
 			.mask           = CLOCKSOURCE_MASK(32),
-			.shift          = 24,
 			.flags          = CLOCK_SOURCE_IS_CONTINUOUS,
 		},
 		.irq = INT_DEBUG_TIMER_EXP,
@@ -216,9 +221,9 @@ static uint32_t msm_read_timer_count(struct msm_clock *clock, int global)
 		global*global_timer_offset;
 
 	if (!(clock->flags & MSM_CLOCK_FLAGS_UNSTABLE_COUNT))
-		return __raw_readl(addr);
+		return __raw_readl_no_log(addr);
 
-	t1 = __raw_readl(addr);
+	t1 = __raw_readl_no_log(addr);
 	t2 = __raw_readl_no_log(addr);
 	if ((t2-t1) <= 1)
 		return t2;
@@ -293,8 +298,6 @@ static int msm_timer_set_next_event(unsigned long cycles,
 
 	clock = clockevent_to_clock(evt);
 	clock_state = &__get_cpu_var(msm_clocks_percpu)[clock->index];
-	if (clock_state->stopped)
-		return 0;
 	now = msm_read_timer_count(clock, LOCAL_TIMER);
 	alarm = now + (cycles << clock->shift);
 	if (clock->flags & MSM_CLOCK_FLAGS_ODD_MATCH_WRITE)
@@ -325,6 +328,7 @@ static void msm_timer_set_mode(enum clock_event_mode mode,
 			       struct clock_event_device *evt)
 {
 	struct msm_clock *clock;
+	struct msm_clock **cur_clock;
 	struct msm_clock_percpu_data *clock_state, *gpt_state;
 	unsigned long irq_flags;
 	struct irq_chip *chip;
@@ -357,7 +361,9 @@ static void msm_timer_set_mode(enum clock_event_mode mode,
 		break;
 	case CLOCK_EVT_MODE_UNUSED:
 	case CLOCK_EVT_MODE_SHUTDOWN:
-		get_cpu_var(msm_active_clock) = NULL;
+		cur_clock = &get_cpu_var(msm_active_clock);
+		if (*cur_clock == clock)
+			*cur_clock = NULL;
 		put_cpu_var(msm_active_clock);
 		clock_state->in_sync = 0;
 		clock_state->stopped = 1;
@@ -944,7 +950,7 @@ unsigned long long notrace sched_clock(void)
 {
 	struct msm_clock *clock = &msm_clocks[msm_global_timer];
 	struct clocksource *cs = &clock->clocksource;
-	u64 cyc = cs->read(cs);
+	u64 cyc = cs->read(cs) + cyc_offset;
 	u64 last_ns_local;
 	last_ns_local = cyc_to_sched_clock(&cd, cyc, ((u32)~0 >> clock->shift));
 	atomic64_set(&last_ns, last_ns_local);
@@ -955,7 +961,7 @@ static void notrace msm_update_sched_clock(void)
 {
 	struct msm_clock *clock = &msm_clocks[msm_global_timer];
 	struct clocksource *cs = &clock->clocksource;
-	u32 cyc = cs->read(cs);
+	u32 cyc = cs->read(cs) + cyc_offset;
 	update_sched_clock(&cd, cyc, ((u32)~0) >> clock->shift);
 }
 
@@ -973,6 +979,49 @@ static void __init msm_sched_clock_init(void)
 	init_sched_clock(&cd, msm_update_sched_clock, 32 - clock->shift,
 			 clock->freq);
 }
+
+void read_persistent_clock(struct timespec *ts)
+{
+	int64_t delta;
+	int64_t sclk_max;
+	struct timespec *tsp = &persistent_ts;
+
+	last_persistent_ns = persistent_ns;
+	persistent_ns = msm_timer_get_sclk_time(&sclk_max);
+
+	if (persistent_ns < last_persistent_ns)
+		delta = sclk_max - last_persistent_ns + persistent_ns;
+	else
+		delta = persistent_ns - last_persistent_ns;
+
+	timespec_add_ns(tsp, delta);
+	*ts = *tsp;
+}
+
+static int msm_timer_suspend(void)
+{
+	read_persistent_clock(&suspend_ts);
+	return 0;
+}
+
+static void msm_timer_resume(void)
+{
+	struct timespec ts;
+	struct msm_clock *clock = &msm_clocks[msm_global_timer];
+	int div = NSEC_PER_SEC / clock->freq;
+
+	read_persistent_clock(&ts);
+	if (timespec_compare(&ts, &suspend_ts) > 0) {
+		ts = timespec_sub(ts, suspend_ts);
+		cyc_offset += (clock->freq * ts.tv_sec) + (ts.tv_nsec / div);
+	}
+}
+
+static struct syscore_ops msm_timer_syscore_ops = {
+	.suspend = msm_timer_suspend,
+	.resume = msm_timer_resume,
+};
+
 static void __init msm_timer_init(void)
 {
 	int i;
@@ -988,7 +1037,6 @@ static void __init msm_timer_init(void)
 		dgt->freq = 19200000 >> MSM_DGT_SHIFT;
 		dgt->clockevent.shift = 32 + MSM_DGT_SHIFT;
 		dgt->clocksource.mask = CLOCKSOURCE_MASK(32 - MSM_DGT_SHIFT);
-		dgt->clocksource.shift = 24 - MSM_DGT_SHIFT;
 		gpt->regbase = MSM_TMR_BASE;
 		dgt->regbase = MSM_TMR_BASE + 0x10;
 		gpt->flags |= MSM_CLOCK_FLAGS_UNSTABLE_COUNT
@@ -1073,8 +1121,7 @@ static void __init msm_timer_init(void)
 			clockevent_delta2ns(clock->write_delay + 4, ce);
 		ce->cpumask = cpumask_of(0);
 
-		cs->mult = clocksource_hz2mult(clock->freq, cs->shift);
-		res = clocksource_register(cs);
+		res = clocksource_register_hz(cs, clock->freq);
 		if (res)
 			printk(KERN_ERR "msm_timer_init: clocksource_register "
 			       "failed for %s\n", cs->name);
@@ -1133,6 +1180,8 @@ static void __init msm_timer_init(void)
 			msm_clocks[MSM_CLOCK_DGT].regbase + TIMER_ENABLE);
 		set_delay_fn(read_current_timer_delay_loop);
 	}
+
+	register_syscore_ops(&msm_timer_syscore_ops);
 }
 
 #ifdef CONFIG_SMP

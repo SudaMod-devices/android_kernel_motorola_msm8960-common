@@ -3474,7 +3474,13 @@ static void __init register_i2c_devices(void)
 	register_i2c_devices_from_dt(MSM_8960_GSBI10_QUP_I2C_BUS_ID);
 }
 
+/* Common MMI 8960 defaults */
 static unsigned sdc_detect_gpio = 20;
+static struct msm_mmc_pad_drv sdc3_pad_drv_on_cfg[] = {
+	{TLMM_HDRV_SDC3_CLK, GPIO_CFG_8MA},
+	{TLMM_HDRV_SDC3_CMD, GPIO_CFG_8MA},
+	{TLMM_HDRV_SDC3_DATA, GPIO_CFG_8MA}
+};
 
 static __init void config_sdc_from_dt(void)
 {
@@ -3489,6 +3495,18 @@ static __init void config_sdc_from_dt(void)
 	prop = of_get_property(node, "pm8921,gpio", &len);
 	if (prop && (len == sizeof(u32)))
 		sdc_detect_gpio = *(u32 *)prop;
+
+	prop = of_get_property(node, "pad_drv_clk", &len);
+	if (prop && (len == sizeof(u32)))
+		sdc3_pad_drv_on_cfg[0].val = *(u32 *)prop;
+
+	prop = of_get_property(node, "pad_drv_cmd", &len);
+	if (prop && (len == sizeof(u32)))
+		sdc3_pad_drv_on_cfg[1].val = *(u32 *)prop;
+
+	prop = of_get_property(node, "pad_drv_dat", &len);
+	if (prop && (len == sizeof(u32)))
+		sdc3_pad_drv_on_cfg[2].val = *(u32 *)prop;
 
 	of_node_put(node);
 
@@ -3772,10 +3790,6 @@ static void (*reboot_ptr)(void) = &mot_factory_reboot_callback;
 static void (*reboot_ptr)(void);
 #endif
 
-static struct msm_spi_platform_data msm8960_qup_spi_gsbi1_pdata = {
-	.max_clock_speed = 15060000,
-};
-
 #define EXPECTED_MBM_PROTOCOL_VERSION 1
 static uint32_t mbm_protocol_version;
 
@@ -3936,8 +3950,6 @@ static void __init msm8960_mmi_init(void)
 		    get_hot_temp_pcb_dt(), get_hot_pcb_offset_dt());
 
 	/* Init the bus, but no devices at this time */
-	msm8960_spi_init(&msm8960_qup_spi_gsbi1_pdata, NULL, 0);
-
 	msm8960_init_watchdog();
 	msm8960_i2c_init(400000, uart_over_gsbi12);
 	msm8960_gfx_init();
@@ -3974,7 +3986,10 @@ static void __init msm8960_mmi_init(void)
 	msm8960_init_cam();
 #endif
 	config_sdc_from_dt();
+	/* Override some of the SDC3 interface configurations */
+	msm8960_preset_mmc_params(3, sdc3_pad_drv_on_cfg);
 	msm8960_init_mmc(sdc_detect_gpio);
+
 	acpuclk_init(&acpuclk_8960_soc_data);
 	register_i2c_devices();
 	msm_fb_add_devices();
