@@ -513,7 +513,6 @@ OBJS := $(VOSS_OBJS) \
                 $(WDI_OBJS)  \
                 $(DXE_OBJS)  \
 
-EXTRA_CFLAGS += -fno-pic
 
 # Module information used by KBuild framework
 obj-m   := $(MODNAME).o
