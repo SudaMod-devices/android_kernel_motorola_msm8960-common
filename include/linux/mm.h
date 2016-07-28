@@ -6,6 +6,7 @@
 #ifdef __KERNEL__
 
 #include <linux/gfp.h>
+#include <linux/bug.h>
 #include <linux/list.h>
 #include <linux/mmzone.h>
 #include <linux/rbtree.h>
@@ -317,6 +318,8 @@ static inline int is_vmalloc_or_module_addr(const void *x)
 	return 0;
 }
 #endif
+
+extern void kvfree(const void *addr);
 
 static inline void compound_lock(struct page *page)
 {
