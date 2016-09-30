@@ -133,12 +133,12 @@ check_write_avail:
 		spin_unlock_irqrestore(&apr_ch->lock, flags);
 		break;
 	case SMD_EVENT_OPEN:
-		pr_info("apr_tal: SMD_EVENT_OPEN\n");
+		pr_debug("apr_tal: SMD_EVENT_OPEN\n");
 		apr_ch->smd_state = 1;
 		wake_up(&apr_ch->wait);
 		break;
 	case SMD_EVENT_CLOSE:
-		pr_info("apr_tal: SMD_EVENT_CLOSE\n");
+		pr_debug("apr_tal: SMD_EVENT_CLOSE\n");
 		break;
 	}
 }
@@ -190,6 +190,9 @@ struct apr_svc_ch_dev *apr_tal_open(uint32_t svc, uint32_t dest,
 		apr_tal_close(&apr_svc_ch[dl][dest][svc]);
 		return NULL;
 	}
+
+	smd_disable_read_intr(apr_svc_ch[dl][dest][svc].ch);
+
 	if (!apr_svc_ch[dl][dest][svc].dest_state) {
 		apr_svc_ch[dl][dest][svc].dest_state = 1;
 		pr_debug("apr_tal:Waiting for apr svc init\n");
